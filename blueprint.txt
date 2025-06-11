@@ -1,0 +1,17 @@
+# **App Name**: LocalVision
+
+## Core Features:
+
+- Video Upload: Upload video files from the local machine.
+- Video Player: Display a video player interface with controls for play, pause, and volume.
+- Format Support: Support common video formats such as MP4, AVI, and MOV.
+
+## Style Guidelines:
+
+- Primary color: Soft blue (#89B4FA) for a calming and focused viewing experience.
+- Background color: Dark gray (#2E3440) to make the video player stand out.
+- Accent color: Light orange (#D08770) to highlight interactive elements.
+- Body and headline font: 'Inter' (sans-serif) for clean and accessible readability.
+- Use simple, minimalist icons for the player controls (play, pause, volume, etc.).
+- Arrange the player controls in a consistent and intuitive manner for easy navigation.
+- Provide subtle transitions when transitioning between video states (e.g., play/pause).

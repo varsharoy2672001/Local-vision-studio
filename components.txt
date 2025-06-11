@@ -1,0 +1,266 @@
+
+"use client";
+
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import {
+  Play,
+  Pause,
+  Volume2,
+  Volume1,
+  VolumeX,
+  Maximize,
+  Minimize,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider"; // Using shadcn Slider
+import { cn } from "@/lib/utils";
+
+interface VideoPlayerProps {
+  src: string;
+  onEnded?: () => void;
+}
+
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, onEnded }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const hideControls = useCallback(() => {
+    if (isPlaying) {
+      setShowControls(false);
+    }
+  }, [isPlaying]);
+
+  const showAndAutoHideControls = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    if (isPlaying) {
+      controlsTimeoutRef.current = setTimeout(hideControls, 3000);
+    }
+  }, [isPlaying, hideControls]);
+  
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
+    const handleLoadedMetadata = () => setDuration(video.duration);
+    const handleVolumeChange = () => {
+      setVolume(video.volume);
+      setIsMuted(video.muted);
+    };
+    const handleVideoEnded = () => {
+      setIsPlaying(false);
+      if (onEnded) onEnded();
+    };
+
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("volumechange", handleVolumeChange);
+    video.addEventListener("ended", handleVideoEnded);
+
+    // Initialize state from video element (e.g. if autoplay is on, or browser remembers volume)
+    setIsPlaying(!video.paused);
+    setVolume(video.volume);
+    setIsMuted(video.muted);
+    if (video.readyState >= 1) { // HAVE_METADATA or more
+        setDuration(video.duration);
+        setCurrentTime(video.currentTime);
+    }
+
+
+    return () => {
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("volumechange", handleVolumeChange);
+      video.removeEventListener("ended", handleVideoEnded);
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+    };
+  }, [src, onEnded]);
+
+  useEffect(() => {
+    showAndAutoHideControls();
+  }, [isPlaying, showAndAutoHideControls]);
+
+  useEffect(() => {
+    if (!isPlaying && controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    if (!isPlaying) {
+        setShowControls(true);
+    }
+  }, [isPlaying]);
+
+  const togglePlayPause = () => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+      } else {
+        videoRef.current.pause();
+      }
+    }
+  };
+
+  const handleVolumeChange = (value: number[]) => {
+    if (videoRef.current) {
+      const newVolume = value[0];
+      videoRef.current.volume = newVolume;
+      setVolume(newVolume);
+      videoRef.current.muted = newVolume === 0;
+      setIsMuted(newVolume === 0);
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
+      if (!videoRef.current.muted && videoRef.current.volume === 0) {
+        videoRef.current.volume = 0.5; // Unmute to a default volume if it was 0
+        setVolume(0.5);
+      }
+    }
+  };
+
+  const handleProgressChange = (value: number[]) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = value[0];
+      setCurrentTime(value[0]);
+    }
+  };
+
+  const toggleFullScreen = () => {
+    const playerContainer = playerContainerRef.current;
+    if (!playerContainer) return;
+
+    if (!document.fullscreenElement) {
+      playerContainer.requestFullscreen().catch(err => {
+        alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+      });
+      setIsFullScreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+        setIsFullScreen(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullScreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullScreenChange);
+  }, []);
+
+  const formatTime = (timeInSeconds: number) => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+  };
+
+  const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume > 0.5 ? Volume2 : Volume1;
+
+  return (
+    <div 
+      ref={playerContainerRef}
+      className="relative w-full max-w-4xl mx-auto bg-black rounded-lg overflow-hidden shadow-2xl group"
+      onMouseMove={showAndAutoHideControls}
+      onMouseLeave={() => {
+        if (isPlaying && controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+        if (isPlaying) controlsTimeoutRef.current = setTimeout(hideControls, 1000);
+      }}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        className="w-full h-full aspect-video"
+        onClick={togglePlayPause}
+      />
+      <div
+        className={cn(
+          "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 ease-in-out",
+          showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+      >
+        {/* Progress Bar */}
+        <Slider
+          value={[currentTime]}
+          max={duration || 0}
+          step={0.1}
+          onValueChange={handleProgressChange}
+          className="w-full mb-3 h-2 [&>span:first-child]:h-2 [&>span:first-child>span]:h-2 [&>span:first-child>span]:bg-primary [&>span:first-child>span]:hover:bg-accent"
+          aria-label="Video progress"
+        />
+        
+        <div className="flex items-center justify-between text-white">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={togglePlayPause}
+              className="text-white hover:bg-white/20 hover:text-accent"
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMute}
+              className="text-white hover:bg-white/20 hover:text-accent"
+              aria-label={isMuted ? "Unmute" : "Mute"}
+            >
+              <VolumeIcon size={24} />
+            </Button>
+            <Slider
+              value={[isMuted ? 0 : volume]}
+              max={1}
+              step={0.01}
+              onValueChange={handleVolumeChange}
+              className="w-24 h-2 [&>span:first-child]:h-2 [&>span:first-child>span]:h-2 [&>span:first-child>span]:bg-primary [&>span:first-child>span]:hover:bg-accent"
+              aria-label="Volume control"
+            />
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleFullScreen}
+              className="text-white hover:bg-white/20 hover:text-accent"
+              aria-label={isFullScreen ? "Exit fullscreen" : "Enter fullscreen"}
+            >
+              {isFullScreen ? <Minimize size={24} /> : <Maximize size={24} />}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default VideoPlayer;
+
